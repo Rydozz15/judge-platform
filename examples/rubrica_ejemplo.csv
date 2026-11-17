@@ -1,0 +1,4 @@
+nombre,descripcion,min_score,max_score,peso,descripcion_1,descripcion_3,descripcion_5
+Relevancia,"Qué tan útil y aplicable es la respuesta para la consulta.",1,5,1.0,"Irrelevante o genérica","Parcialmente útil","Muy útil y aplicable"
+Tono y Empatía,"Si el tono es constructivo, cercano y empático.",1,5,1.0,"Frío o inadecuado","Neutro","Cercano y empático"
+Precisión,"Exactitud y rigor respecto de normativa y literatura.",1,5,1.0,"Contiene errores","Mayormente correcta","Precisa y bien fundamentada"

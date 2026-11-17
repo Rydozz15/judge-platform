@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.pytest_cache/
+
+# Configuración local / secretos
+.env
+.env.*
+!.env.example
+
+# Datos persistidos (contienen evaluaciones reales de jueces: NO versionar)
+data/*
+!data/.gitkeep
+
+# Exportaciones locales
+exports/
+*.csv.tmp
+
+# Editor / SO
+.vscode/
+.idea/
+.DS_Store

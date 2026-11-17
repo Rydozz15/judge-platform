@@ -1,0 +1,3 @@
+pregunta,is_calibration,naive,rag,profesional
+"¿Cómo preparo mi primera postulación a un fondo de investigación?",1,"Respuesta de ejemplo generada por un LLM sin contexto.","Respuesta de ejemplo generada con RAG y citas a documentos.","Respuesta de ejemplo redactada por una mentora experta."
+"¿Cómo equilibro docencia, investigación y gestión?",0,"Respuesta de ejemplo (naive).","Respuesta de ejemplo (rag).","Respuesta de ejemplo (profesional)."

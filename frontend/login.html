@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Evaluación Ciega — Iniciar Sesión</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body style="background: radial-gradient(circle at 50% 30%, #111827, #0b0f19);">
+    
+    <div class="login-wrapper">
+        <div class="login-box glass-panel">
+            <div style="text-align: center;">
+                <div style="font-size: 2.5rem; color: var(--primary); margin-bottom: 12px;">
+                    <i class="fa-solid fa-square-poll-vertical"></i>
+                </div>
+                <h2 style="font-family: var(--font-heading); margin-bottom: 4px;">Evaluación Ciega</h2>
+                <p style="color: var(--text-muted); font-size: 0.85rem;">Plataforma de validación de calidad de respuestas (MentorIA)</p>
+            </div>
+            
+            <form id="login-form" class="card-form" style="display: flex; flex-direction: column; gap: 16px;">
+                <div class="form-group">
+                    <label for="username">Nombre de Usuario</label>
+                    <input type="text" id="username" class="input-field" placeholder="Tu usuario asignado" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Contraseña</label>
+                    <input type="password" id="password" class="input-field" placeholder="Tu contraseña" required>
+                </div>
+                
+                <div id="error-msg" style="color: var(--danger); font-size: 0.85rem; display: none; text-align: center; margin-top: 5px;">
+                    Credenciales incorrectas.
+                </div>
+                
+                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 10px;">
+                    Iniciar Sesión <i class="fa-solid fa-arrow-right-to-bracket"></i>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Limpiar credenciales previas al cargar login
+        sessionStorage.clear();
+
+        document.getElementById("login-form").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            
+            const usernameInput = document.getElementById("username").value.trim();
+            const passwordInput = document.getElementById("password").value;
+            const errorMsg = document.getElementById("error-msg");
+            
+            errorMsg.style.display = "none";
+            
+            try {
+                const response = await fetch("/api/auth/login", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        username: usernameInput,
+                        password: passwordInput
+                    })
+                });
+                
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.detail || "Error de inicio de sesión.");
+                }
+                
+                const user = await response.json();
+                
+                // Guardar en sessionStorage
+                sessionStorage.setItem("eval_user_id", user.id);
+                sessionStorage.setItem("eval_username", user.username);
+                sessionStorage.setItem("eval_display_name", user.display_name);
+                sessionStorage.setItem("eval_user_role", user.role);
+                
+                // Redireccionar
+                if (user.role === "admin") {
+                    window.location.href = "/admin.html";
+                } else {
+                    window.location.href = "/evaluate.html";
+                }
+            } catch (err) {
+                errorMsg.innerText = err.message;
+                errorMsg.style.display = "block";
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Evaluación Ciega — Evaluar</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="eval-header glass-panel" style="border-radius: 0; border: none; border-bottom: 1px solid var(--border-color);">
+        <div class="eval-brand">
+            <i class="fa-solid fa-square-poll-vertical"></i>
+            <span>Evaluación Ciega</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 16px;">
+            <span id="judge-display-name" style="font-weight: 500;">Juez: ...</span>
+            <button id="btn-logout" class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.8rem;">
+                Salir <i class="fa-solid fa-right-from-bracket"></i>
+            </button>
+        </div>
+    </header>
+
+    <div class="eval-main-container">
+        <!-- Pantalla de Carga -->
+        <div id="loading-screen" style="text-align: center; padding: 100px 0; color: var(--text-muted);">
+            <i class="fa-solid fa-circle-notch fa-spin" style="font-size: 3rem; margin-bottom: 16px; color: var(--primary);"></i>
+            <h3>Cargando información de evaluación...</h3>
+        </div>
+
+        <!-- Panel de Bienvenida (Dashboard del Juez) -->
+        <div id="welcome-panel" style="display: none; max-width: 800px; margin: 30px auto; padding: 30px;" class="glass-panel">
+            <div style="text-align: center; margin-bottom: 30px;">
+                <h2 style="font-family: var(--font-heading); margin-bottom: 10px; color: var(--primary);">¡Te damos la bienvenida, <span id="welcome-judge-name">...</span>!</h2>
+                <p style="color: var(--text-muted); font-size: 0.95rem; line-height: 1.6;">
+                    Esta es tu plataforma de evaluación ciega para calificar la calidad de las respuestas académicas generadas por MentorIA.
+                </p>
+            </div>
+
+            <!-- Selector de Campañas -->
+            <div id="judge-campaign-select-container" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 15px; margin-bottom: 25px; display: flex; align-items: center; justify-content: center; gap: 15px;">
+                <label for="judge-campaign-select" style="font-weight: 600; color: var(--text-muted);">Campaña a Evaluar:</label>
+                <select id="judge-campaign-select" class="input-field" style="max-width: 300px; background: #0b0f19;">
+                    <option value="">Cargando campañas...</option>
+                </select>
+            </div>
+
+            <!-- Aviso Juez Sin Campañas -->
+            <div id="judge-no-campaigns-msg" class="glass-panel" style="display: none; padding: 25px; text-align: center; border-color: rgba(239,68,68,0.2); margin-bottom: 25px;">
+                <div style="font-size: 2.2rem; color: var(--danger); margin-bottom: 12px;"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                <h3 style="color: #f3f4f6; margin-bottom: 8px;">No tienes campañas asignadas</h3>
+                <p style="color: var(--text-muted); font-size: 0.95rem; line-height: 1.5; margin: 0;">Actualmente no estás asignado a ninguna campaña de evaluación activa. Por favor, contacta al administrador del sistema para que te asigne una campaña.</p>
+            </div>
+
+
+            <!-- Grid de Métricas -->
+            <div id="welcome-metrics-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 20px; margin-bottom: 30px;">
+                <!-- Completadas -->
+                <div class="glass-panel" style="padding: 15px; text-align: center; border-color: rgba(16,185,129,0.2);">
+                    <div style="font-size: 1.8rem; color: var(--success); margin-bottom: 6px;"><i class="fa-solid fa-circle-check"></i></div>
+                    <div style="font-size: 1.3rem; font-weight: 700; color: #f3f4f6;" id="m-completed-questions">0 / 0</div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; margin-top: 4px; font-weight: 600;">Evaluadas</div>
+                </div>
+
+                <!-- Pendientes -->
+                <div class="glass-panel" style="padding: 15px; text-align: center; border-color: rgba(245,158,11,0.2);">
+                    <div style="font-size: 1.8rem; color: #f59e0b; margin-bottom: 6px;"><i class="fa-solid fa-hourglass-half"></i></div>
+                    <div style="font-size: 1.3rem; font-weight: 700; color: #f3f4f6;" id="m-pending-questions">0</div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; margin-top: 4px; font-weight: 600;">Pendientes</div>
+                </div>
+
+                <!-- Tiempo Promedio -->
+                <div class="glass-panel" style="padding: 15px; text-align: center; border-color: rgba(99,102,241,0.2);">
+                    <div style="font-size: 1.8rem; color: #6366f1; margin-bottom: 6px;"><i class="fa-solid fa-clock"></i></div>
+                    <div style="font-size: 1.3rem; font-weight: 700; color: #f3f4f6;" id="m-avg-time">0s</div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; margin-top: 4px; font-weight: 600;">Tpo. Promedio / Caso</div>
+                </div>
+
+                <!-- Calificación Promedio -->
+                <div class="glass-panel" style="padding: 15px; text-align: center; border-color: rgba(14,165,233,0.2);">
+                    <div style="font-size: 1.8rem; color: #0ea5e9; margin-bottom: 6px;"><i class="fa-solid fa-star"></i></div>
+                    <div style="font-size: 1.3rem; font-weight: 700; color: #f3f4f6;" id="m-avg-score">0.0</div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; margin-top: 4px; font-weight: 600;">Puntaje Promedio</div>
+                </div>
+            </div>
+
+            <!-- Progreso Visual -->
+            <div id="welcome-progress-container" style="margin-bottom: 35px; padding: 0 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 0.85rem;">
+                    <span style="color: var(--text-muted);">Progreso de Calificación</span>
+                    <span id="welcome-progress-percentage" style="font-weight: 600; color: var(--primary);">0%</span>
+                </div>
+                <div class="progress-bar-container" style="height: 10px;">
+                    <div id="welcome-progress-bar-fill" class="progress-bar-fill" style="width: 0%;"></div>
+                </div>
+            </div>
+
+            <!-- Acción de Inicio -->
+            <div style="text-align: center;">
+                <button id="btn-start-evaluation" class="btn btn-primary" style="padding: 15px 40px; font-size: 1.1rem; font-weight: 600; min-width: 250px; border-radius: 8px; box-shadow: 0 4px 14px var(--primary-glow-color);">
+                    Empezar Evaluación <i class="fa-solid fa-play" style="margin-left: 8px;"></i>
+                </button>
+                <div id="welcome-completed-msg" style="display: none; color: var(--success); font-weight: 600; font-size: 1.1rem; margin-top: 10px;">
+                    <i class="fa-solid fa-circle-check"></i> ¡Has completado el 100% de la evaluación!
+                </div>
+            </div>
+        </div>
+
+        <!-- Pantalla de Fin de Evaluación (Agradecimiento) -->
+        <div id="complete-screen" style="display: none; text-align: center; padding: 60px 40px; max-width: 600px; margin: 40px auto;" class="glass-panel">
+            <div style="font-size: 4.5rem; color: var(--success); margin-bottom: 20px;">
+                <i class="fa-solid fa-circle-check"></i>
+            </div>
+            <h2 style="font-family: var(--font-heading); margin-bottom: 12px; color: var(--success);">¡Muchísimas Gracias!</h2>
+            <p style="color: #f3f4f6; font-size: 1.05rem; font-weight: 500; margin-bottom: 16px;">Has completado exitosamente el 100% de la evaluación asignada.</p>
+            
+            <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 15px; margin: 20px 0; display: flex; justify-content: space-around; font-size: 0.9rem;">
+                <div>
+                    <span style="display:block; font-size: 1.5rem; font-weight:700; color:var(--primary);" id="final-completed-questions">0</span>
+                    <span style="color:var(--text-muted); font-size:0.75rem; text-transform:uppercase;">Casos Evaluados</span>
+                </div>
+                <div>
+                    <span style="display:block; font-size: 1.5rem; font-weight:700; color:var(--secondary);" id="final-avg-time">0s</span>
+                    <span style="color:var(--text-muted); font-size:0.75rem; text-transform:uppercase;">Tpo. Promedio / Caso</span>
+                </div>
+                <div>
+                    <span style="display:block; font-size: 1.5rem; font-weight:700; color:var(--success);" id="final-avg-score">0.0</span>
+                    <span style="color:var(--text-muted); font-size:0.75rem; text-transform:uppercase;">Puntaje Promedio</span>
+                </div>
+            </div>
+            
+            <p style="color: var(--text-muted); line-height: 1.6; margin-bottom: 24px; font-size:0.85rem;">Tu colaboración como juez académico es fundamental para validar y guiar el entrenamiento de modelos de lenguaje aplicados a la mentoría universitaria en el proyecto MentorIA.</p>
+            <button onclick="window.location.href='/login.html'" class="btn btn-primary" style="width: 100%; max-width: 250px;">Salir de la Sesión</button>
+        </div>
+
+        <!-- Panel de Evaluación Principal -->
+        <div id="evaluation-panel" style="display: none;">
+            <!-- Botón de Pausa / Volver al Panel de Inicio -->
+            <div style="margin-bottom: 20px;">
+                <button id="btn-pause-evaluation" class="btn btn-secondary" style="padding: 6px 14px; font-size: 0.8rem; display: flex; align-items: center; gap: 6px;">
+                    <i class="fa-solid fa-arrow-left"></i> Volver al Panel de Inicio
+                </button>
+            </div>
+            <!-- Progreso superior -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span style="font-size: 0.9rem; font-weight: 500;" id="progress-text">Progreso: 0 / 0 Preguntas</span>
+                <span id="progress-percentage" style="font-size: 0.85rem; color: var(--text-muted);">0%</span>
+            </div>
+            <div class="progress-bar-container" style="margin-bottom: 30px;">
+                <div id="progress-bar-fill" class="progress-bar-fill"></div>
+            </div>
+
+            <!-- Pregunta -->
+            <div class="glass-panel question-section" style="margin-bottom: 30px;">
+                <div class="question-title">Pregunta a Evaluar</div>
+                <div class="question-text" id="question-text-box">Cargando pregunta...</div>
+            </div>
+
+            <!-- Grid de 3 Respuestas a Evaluar -->
+            <div class="judging-grid" id="judging-cards-container">
+                <!-- Se inyectan dinámicamente las 3 respuestas -->
+            </div>
+
+            <!-- Enviar formulario -->
+            <div style="display: flex; justify-content: flex-end; margin-top: 20px;">
+                <button id="btn-submit-eval" class="btn btn-primary" style="padding: 14px 28px; font-size: 1rem; font-weight: 600;" disabled>
+                    Enviar Evaluación de Pregunta <i class="fa-solid fa-paper-plane"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const userId = sessionStorage.getItem("eval_user_id");
+        if (!userId) {
+            window.location.href = "/login.html";
+        }
+        
+        document.getElementById("judge-display-name").innerText = `Juez: ${sessionStorage.getItem("eval_display_name") || "Cargando"}`;
+        
+        document.getElementById("btn-logout").addEventListener("click", () => {
+            sessionStorage.clear();
+            window.location.href = "/login.html";
+        });
+
+        let currentData = null; // Guardará la data de la pregunta actual
+        let selectedScores = {}; // Formato: { responseId: { criterionId: score } }
+        let comments = {}; // Formato: { responseId: text }
+        let evaluationStartTime = null;
+        let activeSessionId = null;
+
+        // Iniciar sesión del juez para tracking de métricas
+        let currentCampaignId = null;
+
+        async function startSession(campaignId) {
+            try {
+                const res = await fetch("/api/evaluation/session/start", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-User-Id": userId
+                    },
+                    body: JSON.stringify({ campaign_id: campaignId })
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    activeSessionId = data.session_id;
+                    // Iniciar latido si no estaba iniciado
+                    if (!window.heartbeatInterval) {
+                        window.heartbeatInterval = setInterval(sendHeartbeat, 15000);
+                    }
+                }
+            } catch (err) {
+                console.error("Error al iniciar sesión:", err);
+            }
+        }
+
+        async function sendHeartbeat() {
+            if (!activeSessionId) return;
+            try {
+                await fetch("/api/evaluation/session/heartbeat", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-User-Id": userId
+                    },
+                    body: JSON.stringify({ session_id: activeSessionId })
+                });
+            } catch (err) {
+                console.error("Error al enviar heartbeat:", err);
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", async () => {
+            await initCampaignSelector();
+            
+            document.getElementById("btn-start-evaluation").addEventListener("click", () => {
+                loadNextQuestion();
+            });
+            
+            document.getElementById("btn-pause-evaluation").addEventListener("click", () => {
+                loadWelcomeDashboard();
+            });
+            
+            document.getElementById("judge-campaign-select").addEventListener("change", (e) => {
+                currentCampaignId = e.target.value;
+                if (currentCampaignId) {
+                    loadWelcomeDashboard();
+                }
+            });
+        });
+
+        async function initCampaignSelector() {
+            try {
+                const res = await fetch("/api/evaluation/campaigns/active", {
+                    headers: { "X-User-Id": userId }
+                });
+                const campaigns = await res.json();
+                const select = document.getElementById("judge-campaign-select");
+                const container = document.getElementById("judge-campaign-select-container");
+                const noCampMsg = document.getElementById("judge-no-campaigns-msg");
+                const metricsGrid = document.getElementById("welcome-metrics-grid");
+                const progressDiv = document.getElementById("welcome-progress-container");
+                const btnStart = document.getElementById("btn-start-evaluation");
+                
+                select.innerHTML = "";
+                
+                if (campaigns.length === 0) {
+                    container.style.display = "none";
+                    noCampMsg.style.display = "block";
+                    if (metricsGrid) metricsGrid.style.display = "none";
+                    if (progressDiv) progressDiv.style.display = "none";
+                    if (btnStart) btnStart.style.display = "none";
+                    document.getElementById("loading-screen").style.display = "none";
+                    document.getElementById("welcome-panel").style.display = "block";
+                } else {
+                    noCampMsg.style.display = "none";
+                    if (metricsGrid) metricsGrid.style.display = "grid";
+                    if (progressDiv) progressDiv.style.display = "block";
+                    if (btnStart) btnStart.style.display = "inline-block";
+                    
+                    if (campaigns.length === 1) {
+                        // Ocultar selector ya que sólo hay 1 campaña asignada
+                        container.style.display = "none";
+                        currentCampaignId = campaigns[0].id;
+                        await loadWelcomeDashboard();
+                    } else {
+                        // Mostrar selector y poblar
+                        container.style.display = "flex";
+                        for (const c of campaigns) {
+                            const opt = document.createElement("option");
+                            opt.value = c.id;
+                            opt.textContent = c.name;
+                            select.appendChild(opt);
+                        }
+                        currentCampaignId = campaigns[0].id;
+                        select.value = currentCampaignId;
+                        await loadWelcomeDashboard();
+                    }
+                }
+            } catch (err) {
+                console.error("Error loading campaigns:", err);
+            }
+        }
+
+        async function loadWelcomeDashboard() {
+            document.getElementById("loading-screen").style.display = "block";
+            document.getElementById("welcome-panel").style.display = "none";
+            document.getElementById("evaluation-panel").style.display = "none";
+            document.getElementById("complete-screen").style.display = "none";
+            
+            try {
+                if (!currentCampaignId) return;
+                startSession(parseInt(currentCampaignId));
+                const res = await fetch(`/api/evaluation/metrics?campaign_id=${currentCampaignId}`, {
+                    headers: { "X-User-Id": userId }
+                });
+                if (!res.ok) throw new Error("No se pudieron cargar las métricas.");
+                
+                const metrics = await res.json();
+                
+                document.getElementById("welcome-judge-name").innerText = sessionStorage.getItem("eval_display_name") || "Evaluador/a";
+                document.getElementById("m-completed-questions").innerText = `${metrics.completed} / ${metrics.total}`;
+                document.getElementById("m-pending-questions").innerText = metrics.pending;
+                document.getElementById("m-avg-time").innerText = metrics.avg_latency_sec > 60
+                    ? `${Math.round(metrics.avg_latency_sec / 60)}m ${Math.round(metrics.avg_latency_sec % 60)}s`
+                    : `${metrics.avg_latency_sec}s`;
+                document.getElementById("m-avg-score").innerText = metrics.avg_score.toFixed(2);
+                
+                const pct = metrics.total > 0 ? (metrics.completed / metrics.total * 100) : 0;
+                document.getElementById("welcome-progress-percentage").innerText = `${Math.round(pct)}%`;
+                document.getElementById("welcome-progress-bar-fill").style.width = `${pct}%`;
+                
+                // Final stats in thank you card
+                document.getElementById("final-completed-questions").innerText = metrics.completed;
+                document.getElementById("final-avg-time").innerText = metrics.avg_latency_sec > 60
+                    ? `${Math.round(metrics.avg_latency_sec / 60)}m ${Math.round(metrics.avg_latency_sec % 60)}s`
+                    : `${metrics.avg_latency_sec}s`;
+                document.getElementById("final-avg-score").innerText = metrics.avg_score.toFixed(2);
+                
+                const btnStart = document.getElementById("btn-start-evaluation");
+                const completedMsg = document.getElementById("welcome-completed-msg");
+                
+                if (metrics.pending === 0) {
+                    btnStart.style.display = "none";
+                    completedMsg.style.display = "block";
+                    // If they are on welcome panel and completed is 100%, show the final complete screen directly!
+                    if (metrics.completed > 0) {
+                        document.getElementById("welcome-panel").style.display = "none";
+                        document.getElementById("complete-screen").style.display = "block";
+                        document.getElementById("loading-screen").style.display = "none";
+                        return;
+                    }
+                } else {
+                    btnStart.style.display = "inline-block";
+                    completedMsg.style.display = "none";
+                    if (metrics.completed > 0) {
+                        btnStart.innerHTML = `Continuar Evaluación <i class="fa-solid fa-forward" style="margin-left: 8px;"></i>`;
+                    } else {
+                        btnStart.innerHTML = `Empezar Evaluación <i class="fa-solid fa-play" style="margin-left: 8px;"></i>`;
+                    }
+                }
+                
+                document.getElementById("loading-screen").style.display = "none";
+                document.getElementById("welcome-panel").style.display = "block";
+            } catch (err) {
+                console.error(err);
+                alert("Error al cargar dashboard: " + err.message);
+                document.getElementById("loading-screen").style.display = "none";
+            }
+        }
+
+        /**
+         * Carga la siguiente pregunta asignada al juez
+         */
+        async function loadNextQuestion() {
+            document.getElementById("loading-screen").style.display = "block";
+            document.getElementById("evaluation-panel").style.display = "none";
+            document.getElementById("complete-screen").style.display = "none";
+            
+            selectedScores = {};
+            comments = {};
+            evaluationStartTime = Date.now();
+            updateSubmitButtonState();
+            
+            try {
+                if (!currentCampaignId) return;
+                const res = await fetch(`/api/evaluation/next?campaign_id=${currentCampaignId}`, {
+                    headers: {
+                        "X-User-Id": userId
+                    }
+                });
+                
+                if (!res.ok) throw new Error("Error al obtener la siguiente evaluación.");
+                
+                const data = await res.json();
+                currentData = data;
+                
+                // Actualizar progreso
+                const comp = data.progress.completed;
+                const tot = data.progress.total;
+                document.getElementById("progress-text").innerText = `Progreso: ${comp} / ${tot} Preguntas`;
+                const pct = tot > 0 ? (comp / tot * 100) : 0;
+                document.getElementById("progress-percentage").innerText = `${Math.round(pct)}%`;
+                document.getElementById("progress-bar-fill").style.width = `${pct}%`;
+                
+                if (data.status === "completed") {
+                    await loadWelcomeDashboard();
+                    return;
+                }
+                
+                // Renderizar Pregunta
+                document.getElementById("question-text-box").innerText = data.question_text;
+                
+                // Renderizar Respuestas A, B y C
+                const cardsContainer = document.getElementById("judging-cards-container");
+                cardsContainer.innerHTML = "";
+                
+                for (const resp of data.responses) {
+                    selectedScores[resp.id] = {};
+                    comments[resp.id] = "";
+                    
+                    const card = document.createElement("div");
+                    card.className = "response-card glass-panel";
+                    
+                    // HTML para cada criterio de la rúbrica
+                    const rubricHtml = data.rubric.map(crit => {
+                        let scoreDescs = {};
+                        if (crit.score_descriptions) {
+                            try {
+                                scoreDescs = typeof crit.score_descriptions === "string" ? JSON.parse(crit.score_descriptions) : crit.score_descriptions;
+                            } catch (e) {
+                                console.error("Error parsing score descriptions:", e);
+                            }
+                        }
+                        
+                        // Generar botones de 1 a 5
+                        const buttons = [];
+                        for (let val = crit.min_score; val <= crit.max_score; val++) {
+                            const desc = scoreDescs[val] || `Puntaje ${val}`;
+                            buttons.push(`
+                                <button type="button" 
+                                        class="rating-btn" 
+                                        data-response-id="${resp.id}" 
+                                        data-criterion-id="${crit.id}" 
+                                        data-score="${val}"
+                                        title="${escapeHtml(desc)}"
+                                        onclick="selectScore(${resp.id}, ${crit.id}, ${val}, this)">
+                                    ${val}
+                                </button>
+                            `);
+                        }
+                        
+                        return `
+                            <div class="criterion-item">
+                                <div class="criterion-header">
+                                    <span class="criterion-name">${crit.name}</span>
+                                </div>
+                                <div class="criterion-desc">${crit.description}</div>
+                                <div class="rating-group" style="margin-top: 6px;">
+                                    ${buttons.join("")}
+                                </div>
+                            </div>
+                        `;
+                    }).join("");
+                    
+                    card.innerHTML = `
+                        <div class="response-badge">Respuesta ${resp.label}</div>
+                        <div class="response-text-container">${escapeHtml(resp.text)}</div>
+                        
+                        <div class="scoring-section">
+                            ${rubricHtml}
+                            
+                            <div class="form-group" style="margin-top: 10px;">
+                                <label for="comment-${resp.id}">Comentarios de Respuesta ${resp.label} (opcional)</label>
+                                <textarea id="comment-${resp.id}" class="input-field" placeholder="Justifica tu puntaje..." style="height: 60px; resize:none;" oninput="updateComment(${resp.id}, this)"></textarea>
+                            </div>
+                        </div>
+                    `;
+                    
+                    cardsContainer.appendChild(card);
+                }
+                
+                document.getElementById("loading-screen").style.display = "none";
+                document.getElementById("evaluation-panel").style.display = "block";
+            } catch (err) {
+                console.error(err);
+                alert("Error al cargar la evaluación: " + err.message);
+            }
+        }
+
+        /**
+         * Marca el puntaje en la estructura local y actualiza los botones
+         */
+        window.selectScore = function(responseId, criterionId, score, btnElement) {
+            selectedScores[responseId][criterionId] = score;
+            
+            // Actualizar botones activos de este grupo
+            const group = btnElement.parentElement;
+            group.querySelectorAll(".rating-btn").forEach(btn => {
+                btn.classList.remove("active");
+            });
+            btnElement.classList.add("active");
+            
+            updateSubmitButtonState();
+        };
+
+        window.updateComment = function(responseId, textareaElement) {
+            comments[responseId] = textareaElement.value.trim();
+        };
+
+        /**
+         * Verifica si se han evaluado todos los criterios para las 3 respuestas
+         */
+        function isEvaluationComplete() {
+            if (!currentData || !currentData.responses) return false;
+            
+            for (const resp of currentData.responses) {
+                for (const crit of currentData.rubric) {
+                    if (selectedScores[resp.id][crit.id] === undefined) {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        function updateSubmitButtonState() {
+            const submitBtn = document.getElementById("btn-submit-eval");
+            submitBtn.disabled = !isEvaluationComplete();
+        }
+
+        // Registrar submit de evaluación
+        document.getElementById("btn-submit-eval").addEventListener("click", submitEvaluation);
+
+        async function submitEvaluation() {
+            if (!isEvaluationComplete()) return;
+            
+            const submitBtn = document.getElementById("btn-submit-eval");
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = "<i class='fa-solid fa-spinner fa-spin'></i> Guardando...";
+            
+            // Construir payload
+            const totalLatency = Date.now() - evaluationStartTime;
+            const payload = {
+                question_id: currentData.question_id,
+                evaluations: currentData.responses.map(resp => {
+                    const ratings = Object.entries(selectedScores[resp.id]).map(([critId, score]) => ({
+                        criterion_id: parseInt(critId),
+                        score: score
+                    }));
+                    return {
+                        response_id: resp.id,
+                        ratings: ratings,
+                        comment: comments[resp.id] || null,
+                        latency_ms: totalLatency
+                    };
+                })
+            };
+            
+            try {
+                const res = await fetch("/api/evaluation/submit", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-User-Id": userId
+                    },
+                    body: JSON.stringify(payload)
+                });
+                
+                if (!res.ok) throw new Error("Error al guardar la evaluación.");
+                
+                // Cargar siguiente
+                await loadNextQuestion();
+            } catch (err) {
+                console.error(err);
+                alert("Error al enviar evaluación: " + err.message);
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = "Enviar Evaluación de Pregunta <i class='fa-solid fa-paper-plane'></i>";
+            }
+        }
+
+        function escapeHtml(text) {
+            if (!text) return "";
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+        }
+    </script>
+</body>
+</html>
