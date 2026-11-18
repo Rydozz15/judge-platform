@@ -72,10 +72,11 @@ def populate_dummy_data():
         cursor.execute("SELECT id FROM questions WHERE question_text = ?;", (q_text,))
         row = cursor.fetchone()
         if not row:
+            is_calib = 1 if idx < 2 else 0
             cursor.execute("""
             INSERT INTO questions (campaign_id, question_text, order_index, is_calibration, is_active)
-            VALUES (?, ?, ?, 0, 1);
-            """, (campaign_id, q_text, idx))
+            VALUES (?, ?, ?, ?, 1);
+            """, (campaign_id, q_text, idx, is_calib))
             q_id = cursor.lastrowid
             question_ids.append(q_id)
             print(f"Pregunta creada: '{q_text[:40]}...'")
@@ -117,9 +118,13 @@ def populate_dummy_data():
                 })
                 print(f"  Respuesta creada para pregunta {q_id} ({source_type})")
                 
-    # 6. Create judge question order for judges
+    # 6. Create judge question order and campaign_judges for judges
     for judge_name in ["juez1", "juez2"]:
         j_id = judge_ids[judge_name]
+        cursor.execute("""
+        INSERT OR IGNORE INTO campaign_judges (campaign_id, judge_id)
+        VALUES (?, ?);
+        """, (campaign_id, j_id))
         for q_id in question_ids:
             # Randomize order of the responses
             resps = response_ids[q_id]

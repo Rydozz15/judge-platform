@@ -1,6 +1,11 @@
 import sqlite3
 import os
+import hmac
+import hashlib
+import secrets
+import time
 from pathlib import Path
+from typing import Optional
 
 # Ruta de la base de datos: configurable vía EVAL_DB_PATH (por defecto: <repo>/data/evaluation.db)
 _DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "data" / "evaluation.db"
@@ -8,11 +13,93 @@ DB_PATH = Path(os.getenv("EVAL_DB_PATH") or _DEFAULT_DB_PATH).expanduser().resol
 
 # Contraseña inicial del admin (solo se usa al crear el usuario 'admin' por primera vez)
 DEFAULT_ADMIN_PASSWORD = os.getenv("EVAL_ADMIN_PASSWORD", "admin123")
+PASSWORD_PREFIX = "pbkdf2_sha256$"
+
+
+def _load_or_create_secret_key() -> str:
+    env_key = os.getenv("EVAL_SECRET_KEY", "").strip()
+    if env_key:
+        return env_key
+    secret_file = DB_PATH.parent / ".secret_key"
+    try:
+        DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+        if secret_file.exists():
+            val = secret_file.read_text(encoding="utf-8").strip()
+            if len(val) >= 32:
+                return val
+        generated = secrets.token_hex(32)
+        secret_file.write_text(generated, encoding="utf-8")
+        try:
+            os.chmod(secret_file, 0o600)
+        except OSError:
+            pass
+        return generated
+    except Exception:
+        return secrets.token_hex(32)
+
+
+SECRET_KEY = _load_or_create_secret_key()
+
+
+def hash_password(plain: str) -> str:
+    if plain.startswith(PASSWORD_PREFIX):
+        return plain
+    salt = secrets.token_hex(16)
+    iterations = 120_000
+    dk = hashlib.pbkdf2_hmac("sha256", plain.encode("utf-8"), salt.encode("utf-8"), iterations)
+    return f"{PASSWORD_PREFIX}{iterations}${salt}${dk.hex()}"
+
+
+def verify_password(plain: str, stored: str) -> bool:
+    if not stored:
+        return False
+    if stored.startswith(PASSWORD_PREFIX):
+        try:
+            _, iter_str, salt, hex_hash = stored.split("$", 3)
+            dk = hashlib.pbkdf2_hmac(
+                "sha256", plain.encode("utf-8"), salt.encode("utf-8"), int(iter_str)
+            )
+            return hmac.compare_digest(dk.hex(), hex_hash)
+        except Exception:
+            return False
+    return hmac.compare_digest(plain, stored)
+
+
+def create_auth_token(user_id: int, role: str, ttl_sec: int = 86400 * 7) -> str:
+    exp = int(time.time()) + ttl_sec
+    payload = f"{user_id}:{role}:{exp}"
+    sig = hmac.new(SECRET_KEY.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).hexdigest()
+    return f"{payload}:{sig}"
+
+
+def verify_auth_token(token: str) -> Optional[int]:
+    try:
+        parts = token.split(":")
+        if len(parts) != 4:
+            return None
+        uid_str, role, exp_str, sig = parts
+        payload = f"{uid_str}:{role}:{exp_str}"
+        expected = hmac.new(
+            SECRET_KEY.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256
+        ).hexdigest()
+        if not hmac.compare_digest(sig, expected):
+            return None
+        if int(exp_str) < int(time.time()):
+            return None
+        return int(uid_str)
+    except Exception:
+        return None
+
 
 def get_db_connection():
     # Asegurar que el directorio de datos existe
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH, timeout=30.0)
+    try:
+        if DB_PATH.exists():
+            os.chmod(DB_PATH, 0o600)
+    except OSError:
+        pass
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON;")
     try:
@@ -199,7 +286,14 @@ def init_db():
         cursor.execute("""
         INSERT INTO judges (username, password, display_name, role, is_active)
         VALUES ('admin', ?, 'Administrador Principal', 'admin', 1);
-        """, (DEFAULT_ADMIN_PASSWORD,))
+        """, (hash_password(DEFAULT_ADMIN_PASSWORD),))
+
+    # Migrar contraseñas en texto plano existentes a PBKDF2-HMAC-SHA256 de forma transparente
+    cursor.execute("SELECT id, password FROM judges;")
+    for jrow in cursor.fetchall():
+        pw = jrow["password"] or ""
+        if pw and not pw.startswith(PASSWORD_PREFIX):
+            cursor.execute("UPDATE judges SET password = ? WHERE id = ?;", (hash_password(pw), jrow["id"]))
         
     # Insertar criterios de rúbrica base por defecto si no existen
     cursor.execute("SELECT COUNT(*) FROM rubric_criteria;")
@@ -246,6 +340,22 @@ def init_db():
         FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
     );
     """)
+
+    # Sincronizar campaign_judges para jueces que ya tienen preguntas asignadas o sesiones en campañas
+    cursor.execute("""
+    INSERT OR IGNORE INTO campaign_judges (campaign_id, judge_id)
+    SELECT DISTINCT q.campaign_id, o.judge_id
+    FROM judge_question_order o
+    JOIN questions q ON o.question_id = q.id
+    WHERE q.campaign_id IS NOT NULL;
+    """)
+    cursor.execute("""
+    INSERT OR IGNORE INTO campaign_judges (campaign_id, judge_id)
+    SELECT DISTINCT s.campaign_id, s.judge_id
+    FROM judge_sessions s
+    WHERE s.campaign_id IS NOT NULL;
+    """)
             
     conn.commit()
     conn.close()
+
