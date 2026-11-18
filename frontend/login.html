@@ -77,6 +77,9 @@
                 sessionStorage.setItem("eval_username", user.username);
                 sessionStorage.setItem("eval_display_name", user.display_name);
                 sessionStorage.setItem("eval_user_role", user.role);
+                if (user.token) {
+                    sessionStorage.setItem("eval_auth_token", user.token);
+                }
                 
                 // Redireccionar
                 if (user.role === "admin") {
