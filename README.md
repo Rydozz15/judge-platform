@@ -57,7 +57,9 @@ En una base nueva se crea el usuario `admin` con la contraseña de `EVAL_ADMIN_P
 | `EVAL_HOST` | `0.0.0.0` | Interfaz de escucha |
 | `EVAL_PORT` | `8080` | Puerto |
 | `EVAL_DB_PATH` | `./data/evaluation.db` | Ruta de la base SQLite |
-| `EVAL_ADMIN_PASSWORD` | `admin123` | Clave inicial de `admin` (solo al crear la base) |
+| `EVAL_ADMIN_PASSWORD` | `admin123` | Clave inicial de `admin` (hasheada automáticamente con PBKDF2-SHA256) |
+| `EVAL_SECRET_KEY` | *(auto en `data/.secret_key`)* | Clave secreta HMAC-SHA256 para firmar tokens de sesión |
+| `EVAL_CORS_ORIGINS` | `http://localhost:8080,http://127.0.0.1:8080` | Lista de orígenes CORS permitidos separados por coma |
 | `PYTHON` | `python3` | Intérprete para crear `.venv` |
 
 ---
@@ -66,33 +68,54 @@ En una base nueva se crea el usuario `admin` con la contraseña de `EVAL_ADMIN_P
 
 ```
 backend/
-  app.py                          API FastAPI (auth, evaluación, admin, métricas, exportación)
-  database.py                     Esquema SQLite y migraciones ligeras
+  app.py                          API FastAPI (auth HMAC, evaluación, admin, métricas, SSE, exportación)
+  database.py                     Esquema SQLite, migraciones y helpers PBKDF2 / HMAC-SHA256
+  stats.py                        Motor estadístico (Krippendorff, Gwet, ICC, Cohen, Friedman/Wilcoxon, piloto)
   generate_dummy_eval_platform.py Datos de demostración
   requirements.txt
-frontend/                         login.html, evaluate.html, admin.html, css/
+frontend/                         login.html, evaluate.html, admin.html, css/styles.css
 examples/                         CSV de ejemplo (dataset y rúbrica)
-data/                             Base SQLite local (ignorada por git)
-docs/ROADMAP.md                   Plan de mejoras
+tests/                            Suite de pruebas unitarias, UX e integración de seguridad OWASP
+data/                             Base SQLite local y .secret_key (ignorados por git)
+docs/ROADMAP.md                   Hoja de ruta de versiones (v0.1 -> v0.2 -> v0.3/v0.4)
+CHANGELOG.md                      Historial detallado de cambios y features futuros
+render.yaml                       Blueprint de despliegue en Render
 run.sh                            Arranque autocontenido
 ```
 
 ---
 
-## Estado y limitaciones conocidas
+## Métricas y capacidades incluidas (`v0.2.0`)
 
-> ⚠️ **Seguridad:** la versión actual es apta solo para uso local / red de confianza. La autenticación se basa en un header `X-User-Id` sin token firmado y las contraseñas se guardan en texto plano. **No exponer a Internet** hasta completar la Fase 0 del [ROADMAP](docs/ROADMAP.md).
+- **Acuerdo inter-jueces en tiempo real (`backend/stats.py`):**
+  - **Alpha de Krippendorff ($\alpha$)** para niveles **ordinal**, **intervalo** y **nominal**, tolerante a datos faltantes y $N$ variable de jueces + **IC 95 % por bootstrap**.
+  - **AC2 de Gwet** (ponderado ordinal, resistente a la paradoja de prevalencia), **ICC(2,1) / ICC(2,k)** (acuerdo absoluto), **Kappa de Fleiss** (nominal) y **% de acuerdo exacto y dentro de $\pm 1$ punto**.
+  - **Matriz Juez × Juez** con **Kappa de Cohen ponderado cuadrático ($\kappa_w$)** y diferencia media.
+  - Desgloses automáticos **por criterio de rúbrica**, **por variante** y **Calibración vs Producción** (las preguntas con `is_calibration=1` se priorizan automáticamente al inicio).
+- **Comparación estadística entre variantes:**
+  - Media, DE, IC 95 %, Mediana e IQR por variante + **Test de Friedman ($\chi^2$)** y comparaciones post-hoc por pares de **Wilcoxon con corrección de Holm-Bonferroni**.
+- **Gestión de pilotos y calidad de jueces:**
+  - Avance global y por juez, jueces en línea (*heartbeat*), ritmo (`casos/hora`) y **ETA**.
+  - Diagnóstico de sesgo de **severidad/lenidad ($\Delta$ y $z$-score)** y alertas automáticas (*speeder*, *straight-lining*, *bajo acuerdo*).
+  - **Consola de Auditoría de Desacuerdos**: identifica e inspecciona los casos con mayor dispersión entre jueces para sesiones de calibración.
+- **UX Anti-Sesgo, Tiempo Real y Experiencia Móvil + PC:**
+  - Stream **SSE (`/api/admin/stream`)** con actualización en vivo en `admin.html` y sub-navegación segmentada en 4 vistas analíticas.
+  - En `evaluate.html`: ocultamiento de indicadores que induzcan auto-calibración o efecto Hawthorne, navegación al **Caso Anterior** con precarga de respuestas para corregir errores, modo enfocado por pestañas (`Respuesta A / B / C`) para móviles con botones táctiles $\ge 46\text{ px}$, barra inferior fija y **autoguardado en `localStorage`**.
+- **Ciberseguridad (OWASP Top 10):**
+  - Autenticación obligatoria mediante tokens firmados `HMAC-SHA256`, contraseñas con `PBKDF2-HMAC-SHA256` (120.000 iteraciones + migración automática), rate-limiting contra fuerza bruta en login (`HTTP 429`), protección anti-IDOR en sesiones y envíos, sanitización contra *CSV Formula Injection* y cabeceras HTTP de seguridad.
 
-- Acuerdo entre jueces: solo **Kappa de Fleiss** (nominal). Krippendorff α, Kappa ponderado e ICC están planificados.
-- El panel de métricas no se actualiza en tiempo real.
-- Diseño parcialmente responsive (sin breakpoints para móvil).
-
-Ver el plan completo en [`docs/ROADMAP.md`](docs/ROADMAP.md).
-
-## Respaldo de datos
-
-La base vive en `data/evaluation.db` (modo WAL). Para respaldar en caliente:
+## Pruebas automatizadas
 
 ```bash
-sqlite3 data/evaluation.db ".backup 'data/evaluation-$(date +%F).db'"
+./.venv/bin/python -m unittest discover -s tests -v
 ```
+
+## Despliegue en Render y Respaldo de Datos
+
+- **Render:** el repositorio incluye `render.yaml` (`uvicorn backend.app:app --host 0.0.0.0 --port $PORT`). Si usas SQLite en la nube, monta un **Persistent Disk** en `/var/data` y configura `EVAL_DB_PATH=/var/data/evaluation.db` (o exporta los CSV/JSON al finalizar cada sesión si usas el plan gratuito efímero).
+- **Respaldo local en caliente (SQLite WAL):**
+  ```bash
+  sqlite3 data/evaluation.db ".backup 'data/evaluation-$(date +%F).db'"
+  ```
+- Consulta [`CHANGELOG.md`](CHANGELOG.md) y [`docs/ROADMAP.md`](docs/ROADMAP.md) para ver el detalle de cambios de `v0.1.0` $\rightarrow$ `v0.2.0` y los próximos features (`v0.3.0` – `v0.4.0`).
+

@@ -1,109 +1,54 @@
-# Roadmap — Plataforma de Evaluación Ciega
+# Roadmap — Plataforma de Evaluación Ciega (`judge-platform`)
 
-Objetivo: dejar la plataforma lista para **pilotos reales con jueces externos**, con **métricas de gestión**, **análisis de acuerdo inter-jueces en tiempo real** (Krippendorff α y otros) y **UI usable en móvil y PC**.
+Este documento describe la evolución del proyecto desde la extracción inicial (`v0.1.0`), la versión actual de pilotos estadísticos en tiempo real (`v0.2.0`) y las próximas iteraciones planificadas (`v0.3.0` y `v0.4.0`).
 
 ```mermaid
 flowchart LR
-  F0["Fase 0: Seguridad, tests y CI"] --> F1["Fase 1: Motor estadístico"]
-  F1 --> F2["Fase 2: Métricas de gestión"]
-  F1 --> F3["Fase 3: Tiempo real"]
-  F0 --> F4["Fase 4: UI móvil + PC"]
-  F2 --> F5["Fase 5: Flujo de piloto"]
-  F3 --> F5
-  F4 --> F5
-  F5 --> F6["Fase 6: Despliegue"]
+  V01["v0.1.0: Base Autocontenida (Completado)"] --> V02["v0.2.0: Motor IRR, UX Mobile+PC y Seguridad OWASP (Actual)"]
+  V02 --> V03["v0.3.0: Persistencia Cloud, Markdown y Bloques Balanceados"]
+  V03 --> V04["v0.4.0: Exportación LaTeX/APA, Magic Links y Detección de Fatiga"]
 ```
 
 ---
 
-## Fase 0 — Base sólida (bloqueante antes de jueces externos)
+## Estado Actual: `v0.2.0` (Completado)
 
-| # | Tarea | Motivo |
+| Bloque | Estado | Implementación |
 |---|---|---|
-| 0.1 | Reemplazar auth por header `X-User-Id` por **token firmado** (cookie `HttpOnly` o JWT con expiración). | Hoy cualquiera puede enviar `X-User-Id: 1` y actuar como admin sin contraseña (verificado). |
-| 0.2 | **Hash de contraseñas** (argon2/bcrypt) con migración transparente al primer login. | Hoy se guardan en texto plano. |
-| 0.3 | Restringir jueces a **campañas asignadas** (`campaign_judges`, hoy vacía) y validar `campaign_id`/`session_id` contra el usuario. | Aislamiento entre pilotos. |
-| 0.4 | Corregir bug: en `get_admin_metrics` el κ de calibración se **sobrescribe** con el κ global. | Métrica reportada incorrecta. |
-| 0.5 | Validar puntajes dentro de `[min_score, max_score]` y que la respuesta pertenezca a la pregunta en `/api/evaluation/submit`. | Integridad de datos. |
-| 0.6 | Tests con `pytest` + `TestClient` sobre DB temporal; **GitHub Actions** (lint + tests). | Red de seguridad para lo que sigue. |
-| 0.7 | Dividir `app.py` (1.500 líneas) en routers: `auth`, `evaluation`, `admin`, `metrics`, `export`. | Mantenibilidad. |
-
-**Criterio de cierre:** sin acceso a `/api/admin/*` sin token válido; tests verdes en CI.
+| **Fase 0 — Seguridad OWASP y Tests** | ✅ Completado (`v0.2.0`) | Tokens firmados `HMAC-SHA256`, contraseñas `PBKDF2-HMAC-SHA256` con auto-migración, rate-limiting en `/api/auth/login` (`HTTP 429`), prevención de IDOR en sesiones/evaluaciones, sanitización *CSV Formula Injection*, cabeceras HTTP de seguridad y suite `tests/test_stats_and_api.py`. |
+| **Fase 1 — Motor Estadístico (`backend/stats.py`)** | ✅ Completado (`v0.2.0`) | **Krippendorff's $\alpha$** (nominal, ordinal, intervalo + IC 95 % bootstrap), **AC2 de Gwet**, **ICC(2,1) / ICC(2,k)**, **Kappa de Fleiss**, matriz par-a-par **Cohen's $\kappa_w$**, acuerdo exacto y $\pm 1$, **Test de Friedman** y post-hoc **Wilcoxon + Holm-Bonferroni**. |
+| **Fase 2 — Gestión Operativa del Piloto** | ✅ Completado (`v0.2.0`) | Progreso global y por juez, jueces online en vivo, ritmo (`casos/hora`), **ETA**, sesgo de severidad/lenidad ($z$-score), banderas de calidad (*speeder*, *straight-lining*, *bajo acuerdo*) y **Consola de Auditoría de Desacuerdos**. |
+| **Fase 3 — Tiempo Real (SSE)** | ✅ Completado (`v0.2.0`) | Stream `GET /api/admin/stream` con reconexión automática e indicador en vivo en `admin.html`. |
+| **Fase 4 — UX Anti-Sesgo y Mobile + PC** | ✅ Completado (`v0.2.0`) | Eliminación de indicadores que inducían efecto Hawthorne / auto-calibración en `evaluate.html`, navegación al **Caso Anterior** con precarga de puntajes, modo enfocado por pestañas A·B·C en móvil ($\ge 46\text{ px}$), autoguardado en `localStorage` y sub-navegación segmentada en 4 vistas analíticas en `admin.html`. |
 
 ---
 
-## Fase 1 — Motor estadístico de acuerdo (`backend/stats/`)
+## Próximas Versiones Planificadas (`v0.3.0` – `v0.4.0`)
 
-Funciones puras (numpy/scipy), independientes de la API y con tests contra implementaciones de referencia (`krippendorff`, `pingouin`, `statsmodels`).
-
-| Métrica | Nivel de medida | Uso |
-|---|---|---|
-| **Krippendorff α** | nominal, **ordinal**, **intervalo** | Métrica principal: tolera datos faltantes y N jueces variable. |
-| Fleiss κ | nominal | Compatibilidad con lo existente. |
-| **Cohen κ ponderado** (cuadrático) | ordinal | Matriz **juez × juez** para detectar pares divergentes. |
-| **ICC(2,1) / ICC(2,k)** | intervalo | Consistencia absoluta de puntajes. |
-| Gwet AC2 | ordinal | Robusto a la "paradoja del kappa" (distribuciones sesgadas). |
-| % acuerdo exacto y **±1** | — | Lectura intuitiva para gestión. |
-
-- Desgloses: global, **por criterio**, **por variante**, **calibración vs producción**.
-- **IC 95 % por bootstrap** (por ítem) y semáforo interpretativo (α ≥ 0.80 fiable; 0.667–0.80 tentativo; < 0.667 insuficiente).
-- Comparación de variantes: **Friedman** + post-hoc **Wilcoxon** con corrección de Holm; tamaño de efecto. Export largo para modelos mixtos externos (R/Python).
-- Nuevas dependencias: `numpy`, `scipy` (runtime); `krippendorff`, `pingouin` (solo tests).
+### `v0.3.0` — Persistencia Cloud, Formato Rico y Diseños Experimentales Escalables
+1. **Adaptador Dual SQLite / PostgreSQL (`DATABASE_URL`)**:
+   - Permitir conectar a PostgreSQL gestionado (Neon, Supabase, Render Postgres) o Turso/libSQL en entornos *cloud* sin disco local persistente, manteniendo SQLite como opción por defecto en local.
+2. **Renderizado Seguro de Markdown y Citas en Respuestas**:
+   - Formatear listas, negritas, tablas y bloques de código dentro de las respuestas evaluadas (con sanitización `DOMPurify`) para mejorar la legibilidad de textos largos sin comprometer el anonimato de la fuente.
+3. **Asignación por Bloques Incompletos Balanceados (*Balanced Incomplete Block Design — BIBD*)**:
+   - Soportar bancos grandes ($>50$ casos) donde cada juez evalúa un subconjunto de $M$ preguntas más las preguntas obligatorias de calibración (`is_calibration=1`), maximizando la cobertura total sin agotar a cada evaluador.
+4. **Ranking Preferencial / Desempate Explícito (*Best-Worst / Bradley-Terry*)**:
+   - Opción por campaña para que el juez, tras puntuar la rúbrica, elija opcionalmente la mejor respuesta global del caso ($A \succ B \succ C$), calculando un ranking **Elo / Bradley-Terry** complementario a los puntajes Likert.
+5. **Previsualizador y Validador Interactivo de CSV (*Dry-Run*)**:
+   - Vista previa antes de confirmar la importación de un CSV que valide columnas, codificación, preguntas repetidas y respuestas vacías.
+6. **Modularización de Routers FastAPI**:
+   - Separar `backend/app.py` en submódulos (`routers/auth.py`, `routers/evaluation.py`, `routers/admin.py`, `routers/analytics.py`) a medida que crezcan los endpoints en `v0.3.0`.
 
 ---
 
-## Fase 2 — Métricas de gestión del piloto
-
-- **Progreso:** % por campaña, por juez y por ítem; cobertura (nº de jueces por ítem vs objetivo); ritmo (ítems/hora) y **ETA** vs `deadline`.
-- **Calidad del juez:** severidad/lenidad (media del juez vs grupo, z-score), **straight-lining** (varianza ≈ 0), **speeders** (latencia bajo umbral), acuerdo de cada juez con el consenso.
-- **Auditoría de desacuerdos:** top-N ítems/respuestas con mayor dispersión, con acceso directo al texto para discusión de calibración.
-- **Actividad:** jueces conectados ahora (heartbeat), tiempo efectivo por sesión, abandonos.
-- **Resultados:** medias, medianas, DE e IC por variante × criterio; distribución de puntajes.
-
----
-
-## Fase 3 — Tiempo real
-
-- Endpoint **SSE** `GET /api/admin/stream?campaign_id=…` que emite métricas actualizadas tras cada `submit` (bus de eventos en proceso).
-- Recalculo **incremental/cacheado** por campaña (invalidación en cada envío) para no recalcular todo en cada petición.
-- Fallback a *polling* configurable si SSE no está disponible (proxies).
-
----
-
-## Fase 4 — UI móvil + PC
-
-- CSS **mobile-first** con breakpoints `360 / 768 / 1280 px`; hoy `styles.css` no tiene `@media` y `minmax(350px, 1fr)` desborda en móviles.
-- **Evaluación (juez):**
-  - Móvil: una respuesta por vista con pestañas/swipe A·B·C, rúbrica debajo, botones de puntaje ≥ 44 px, barra de envío fija, progreso visible.
-  - PC: respuestas lado a lado con rúbrica fija.
-  - **Autoguardado** de borrador (localStorage) y reintento ante cortes de red.
-- **Admin:** dashboard de KPIs en tarjetas, heatmap juez × juez, gráficos de α por criterio; tablas que pasan a tarjetas en móvil.
-- Opcional: PWA instalable; servir Chart.js/íconos localmente (sin CDN).
-- Verificación manual en 360 px y ≥ 1280 px en cada cambio.
-
----
-
-## Fase 5 — Flujo de piloto de punta a punta
-
-- **Asistente de campaña:** crear → rúbrica → jueces → dataset → revisar → activar → cerrar.
-- **Vista previa y validación del CSV** antes de importar (columnas, duplicados, celdas vacías).
-- **Diseño de asignación:** todos evalúan todo, o subconjuntos balanceados con **solapamiento configurable** para medir acuerdo; ítems de calibración obligatorios al inicio.
-- Instrucciones/consentimiento para jueces; duplicar campaña; congelar resultados al cerrar.
-- **Reporte del piloto** exportable (HTML/PDF) con métricas, acuerdo y comentarios.
-
----
-
-## Fase 6 — Despliegue
-
-- `Dockerfile` + `docker-compose.yml` (volumen para `data/`).
-- Respaldos automáticos de SQLite (`.backup` programado).
-- HTTPS vía proxy inverso (p. ej. Caddy) y guía de despliegue en VPS.
-
----
-
-## Decisiones abiertas
-
-1. **Alcance del repositorio:** solo esta plataforma (actual) o la suite completa.
-2. **Visibilidad y licencia** del repo (privado/público; MIT, Apache-2.0, etc.).
-3. **Dónde correrá el piloto:** red local vs Internet (define la urgencia de la Fase 0).
-4. **Escala de medida** de la rúbrica a reportar como principal (¿ordinal o intervalo para α?).
+### `v0.4.0` — Publicación Científica Directa y Automatización de Paneles
+1. **Exportador de Tablas LaTeX (`booktabs`) y Reportes APA / PDF**:
+   - Descarga directa del código LaTeX y tablas Markdown con las métricas de acuerdo ($\alpha$ ordinal/intervalo + IC 95 %, AC2, ICC) y resultados inferenciales ($\chi^2$ de Friedman y $p_{\text{Holm}}$ de Wilcoxon) listos para incluir en artículos o capítulos de tesis.
+2. **Acceso por Enlace Mágico (*Magic Links*) y Pantalla de Consentimiento Informado**:
+   - Generación de enlaces únicos firmados por juez (acceso directo en 1 clic desde WhatsApp/correo en móvil) y aceptación opcional de protocolo ético / instrucciones antes del Caso #1.
+3. **Detección en Vivo de Fatiga Intrasesión**:
+   - Monitoreo de la curva de tiempo de respuesta y caída de varianza dentro de una misma sesión, sugiriendo pausas activas al juez tras $N$ casos consecutivos.
+4. **Sellado Criptográfico de Campañas Cerradas (*Reproducible Audit Trail*)**:
+   - Opción para congelar definitivamente una campaña finalizada y emitir un manifiesto firmado (`SHA-256`) del dataset, rúbrica y matriz de evaluaciones.
+5. **Modo Claro / Oscuro para Lectura Extendida**:
+   - Tema claro de alto contraste (estilo papel académico) conmutable desde la barra superior del evaluador.
